@@ -1,0 +1,15 @@
+<project ...>
+    <parent>
+        <groupId>com.example</groupId>
+        <artifactId>repro-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>api</artifactId>
+    <dependencies>
+        <!-- Transitive dep declared as compile in api -->
+        <dependency>
+            <groupId>com.atlassian.annotations</groupId>
+            <artifactId>atlassian-annotations</artifactId>
+        </dependency>
+    </dependencies>
+</project>
