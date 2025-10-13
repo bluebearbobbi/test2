@@ -1,0 +1,24 @@
+<project ...>
+    <parent>
+        <groupId>com.example</groupId>
+        <artifactId>repro-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>plugin</artifactId>
+    <dependencies>
+        <!-- Direct dep on api as provided (winning path if first) -->
+        <dependency>
+            <groupId>com.example</groupId>
+            <artifactId>api</artifactId>
+            <version>1.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Another dep that pulls annotations as compile (losing path) -->
+        <dependency>
+            <groupId>some.other.group</groupId>
+            <artifactId>some-lib</artifactId>
+            <version>1.0</version>
+            <!-- Assume this lib transitively brings annotations:compile -->
+        </dependency>
+    </dependencies>
+</project>
