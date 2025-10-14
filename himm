@@ -8,11 +8,11 @@
     <packaging>pom</packaging>
     <modules>
         <module>api</module>
+        <module>lib</module>
         <module>plugin</module>
     </modules>
     <dependencyManagement>
         <dependencies>
-            <!-- Ensure consistent version -->
             <dependency>
                 <groupId>com.atlassian.annotations</groupId>
                 <artifactId>atlassian-annotations</artifactId>
