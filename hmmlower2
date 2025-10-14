@@ -1,4 +1,7 @@
-<project ...>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.example</groupId>
         <artifactId>repro-parent</artifactId>
@@ -6,19 +9,19 @@
     </parent>
     <artifactId>plugin</artifactId>
     <dependencies>
-        <!-- Direct dep on api as provided (winning path if first) -->
+        <!-- Winning path (first in POM order): api as provided, pulls annotations:provided (depth 1 for api, 2 for annotations) -->
         <dependency>
             <groupId>com.example</groupId>
             <artifactId>api</artifactId>
             <version>1.0.0</version>
             <scope>provided</scope>
         </dependency>
-        <!-- Another dep that pulls annotations as compile (losing path) -->
+        <!-- Losing path: lib as compile, pulls annotations:compile (depth 1 for lib, 2 for annotations) -->
         <dependency>
-            <groupId>some.other.group</groupId>
-            <artifactId>some-lib</artifactId>
-            <version>1.0</version>
-            <!-- Assume this lib transitively brings annotations:compile -->
+            <groupId>com.example</groupId>
+            <artifactId>lib</artifactId>
+            <version>1.0.0</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 </project>
