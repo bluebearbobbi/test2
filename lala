@@ -1,0 +1,13 @@
+docker node ls --format "table {{.ID}}\t{{.Hostname}}\t{{.Status}}\t{{.Availability}}\t{{.ManagerStatus}}"
+
+docker service ps hub_bomengine --no-trunc  # Replace with your service
+
+docker node inspect self --pretty | grep -A10 "Resources"
+
+docker service scale hub_jobrunner=0 hub_webapp=0 hub_hub_webserver=0  # Keep postgres/cfssl up if needed
+
+
+docker container prune -f
+docker image prune -a -f  # Frees GBs from old Black Duck images
+docker volume prune -f    # Careful—only if no data to preserve
+docker system prune -a -f
