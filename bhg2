@@ -10,22 +10,14 @@ if [ $# -ne 3 ]; then
     exit 1
 fi
 
-BASE_URL="${1%/}"  # Remove trailing slash if present
+BASE_URL="$1"
 API_TOKEN="$2"
 CSV_FILE="$3"
-
-if [ ! -f "$CSV_FILE" ]; then
-    echo "CSV file not found: $CSV_FILE"
-    exit 1
-fi
-
-echo "Base URL: $BASE_URL"
-echo "CSV file: $CSV_FILE"
 
 # Fetch bearer token
 TOKEN_RESPONSE=$(curl -s -k -X POST "${BASE_URL}/api/tokens/authenticate" \
     -H "Authorization: token ${API_TOKEN}" \
-    -H "Accept: application/vnd.blackducksoftware.user-4+json" 2>&1)
+    -H "Accept: application/vnd.blackducksoftware.user-4+json")
 
 BEARER_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.bearerToken' 2>/dev/null)
 
@@ -34,26 +26,17 @@ if [ -z "$BEARER_TOKEN" ] || [ "$BEARER_TOKEN" = "null" ]; then
     exit 1
 fi
 
-echo "Bearer token fetched successfully."
-
-# Function to perform curl and get body and http code, with verbose for troubleshooting
+# Function to perform curl and get body and http code
 do_curl() {
-    response=$(curl -v -k -w "\n%{http_code}" "$@" 2>&1)
+    response=$(curl -s -k -w "\n%{http_code}" "$@")
     http_code="${response##*$'\n'}"
-    body="${response%${http_code}}"
-    body="${body%$'\n'}"  # Remove trailing newline if present
+    body="${response%$'\n'${http_code}}"
 }
-
-echo "Starting deletion loop..."
 
 # Read project IDs from CSV and delete each one
 while IFS= read -r PROJECT_ID; do
-    PROJECT_ID="${PROJECT_ID%$'\r'}"  # Remove carriage return if present (from DOS CSV)
-    PROJECT_ID=$(echo "$PROJECT_ID" | sed 's/^[ \t]*//;s/[ \t]*$//')  # Trim whitespace
     if [ -n "$PROJECT_ID" ]; then
         FULL_URL="${BASE_URL}/api/projects/${PROJECT_ID}"
-        echo "Processing ID: ${PROJECT_ID}"
-        echo "Attempting to delete: ${FULL_URL}"
         do_curl -X DELETE "${FULL_URL}" \
             -H "Authorization: Bearer ${BEARER_TOKEN}" \
             -H "Accept: application/json"
@@ -62,10 +45,8 @@ while IFS= read -r PROJECT_ID; do
             echo "Successfully deleted project ${PROJECT_ID}"
         else
             echo "Failed to delete project ${PROJECT_ID}. HTTP code: ${http_code}"
-            echo "Response body/error: ${body}"
+            echo "Response body: ${body}"
         fi
-    else
-        echo "Skipping empty line"
     fi
 done < "${CSV_FILE}"
 
