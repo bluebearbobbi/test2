@@ -3,7 +3,6 @@
 # Usage: ./delete_blackduck_projects.sh <BASE_URL> <API_TOKEN> <CSV_FILE>
 # Example: ./delete_blackduck_projects.sh https://your-blackduck-instance.com YOUR_API_TOKEN_HERE project_ids.csv
 # The CSV_FILE should contain one project ID per line, no headers.
-# Note: This script will delete ALL versions of each project before deleting the project itself.
 # WARNING: Deletion is permanent and cannot be undone. Use with caution.
 
 if [ $# -ne 3 ]; then
@@ -36,49 +35,9 @@ do_curl() {
     body=$(echo "$response" | head -n -1)
 }
 
-# Read project IDs from CSV
+# Read project IDs from CSV and delete each one
 while IFS= read -r PROJECT_ID; do
     if [ -n "$PROJECT_ID" ]; then
-        echo "Processing project: ${PROJECT_ID}"
-
-        # Get project versions
-        do_curl -X GET "${BASE_URL}/api/projects/${PROJECT_ID}/versions?limit=9999" \
-            -H "Authorization: Bearer ${BEARER_TOKEN}" \
-            -H "Accept: application/json"
-
-        if [ "${http_code:0:1}" != "2" ]; then
-            echo "Failed to get versions for project ${PROJECT_ID}. HTTP code: ${http_code}"
-            echo "Response body: ${body}"
-            continue
-        fi
-
-        # Extract version hrefs
-        VERSION_HREFS=$(echo "${body}" | jq -r '.items[]? ._meta.href' 2>/dev/null)
-
-        if [ -z "$VERSION_HREFS" ]; then
-            echo "No versions found for project ${PROJECT_ID}."
-        else
-            echo "Found $(echo "$VERSION_HREFS" | wc -l) versions to delete."
-            # Delete each version
-            while IFS= read -r VERSION_HREF; do
-                if [ -n "$VERSION_HREF" ]; then
-                    echo "Deleting version: ${VERSION_HREF}"
-                    do_curl -X DELETE "${VERSION_HREF}" \
-                        -H "Authorization: Bearer ${BEARER_TOKEN}" \
-                        -H "Accept: application/json"
-
-                    if [ "${http_code}" = "204" ] || [ "${http_code}" = "200" ]; then
-                        echo "Successfully deleted version ${VERSION_HREF}"
-                    else
-                        echo "Failed to delete version ${VERSION_HREF}. HTTP code: ${http_code}"
-                        echo "Response body: ${body}"
-                        # Continue to next, but project delete might fail if any version remains
-                    fi
-                fi
-            done <<< "${VERSION_HREFS}"
-        fi
-
-        # Now delete the project
         echo "Deleting project: ${PROJECT_ID}"
         do_curl -X DELETE "${BASE_URL}/api/projects/${PROJECT_ID}" \
             -H "Authorization: Bearer ${BEARER_TOKEN}" \
