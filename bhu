@@ -1,10 +1,5 @@
 #!/bin/bash
 
-# Usage: ./delete_blackduck_projects.sh <BASE_URL> <API_TOKEN> <CSV_FILE>
-# Example: ./delete_blackduck_projects.sh https://your-blackduck-instance.com YOUR_API_TOKEN_HERE project_ids.csv
-# The CSV_FILE should contain one project ID per line, no headers.
-# WARNING: Deletion is permanent and cannot be undone. Use with caution.
-
 if [ $# -ne 3 ]; then
     echo "Usage: $0 <BASE_URL> <API_TOKEN> <CSV_FILE>"
     exit 1
@@ -14,42 +9,35 @@ BASE_URL="$1"
 API_TOKEN="$2"
 CSV_FILE="$3"
 
-# Fetch bearer token
+# Get token
 TOKEN_RESPONSE=$(curl -s -k -X POST "${BASE_URL}/api/tokens/authenticate" \
     -H "Authorization: token ${API_TOKEN}" \
     -H "Accept: application/vnd.blackducksoftware.user-4+json")
 
-BEARER_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.bearerToken' 2>/dev/null)
+BEARER_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.bearerToken')
 
 if [ -z "$BEARER_TOKEN" ] || [ "$BEARER_TOKEN" = "null" ]; then
-    echo "Failed to fetch bearer token. Response: ${TOKEN_RESPONSE}"
+    echo "Failed to get token: $TOKEN_RESPONSE"
     exit 1
 fi
 
-# Function to perform curl and get body and http code
-do_curl() {
-    response=$(curl -s -k -w "\n%{http_code}" "$@" 2>&1)
-    http_code="${response##*$'\n'}"
-    body="${response%$'\n'${http_code}}"
-}
-
-# Read project IDs from CSV and delete each one
-while IFS= read -r PROJECT_ID; do
+# Delete projects
+while read -r PROJECT_ID; do
     if [ -n "$PROJECT_ID" ]; then
-        FULL_URL="${BASE_URL}/api/projects/${PROJECT_ID}"
-        do_curl -X DELETE "${FULL_URL}" \
+        RESPONSE=$(curl -s -k -w "%{http_code}" -X DELETE "${BASE_URL}/api/projects/${PROJECT_ID}" \
             -H "Authorization: Bearer ${BEARER_TOKEN}" \
-            -H "Accept: application/json"
-
-        if [ "${http_code}" = "204" ] || [ "${http_code}" = "200" ]; then
-            echo "Successfully deleted project ${PROJECT_ID}"
-        elif [ "${http_code}" = "000" ]; then
-            echo "Curl failed for project ${PROJECT_ID}: ${body}"
+            -H "Accept: application/json" 2>&1)
+        
+        HTTP_CODE=${RESPONSE: -3}
+        BODY=${RESPONSE%${HTTP_CODE}}
+        
+        if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "Deleted $PROJECT_ID"
         else
-            echo "Failed to delete project ${PROJECT_ID}. HTTP code: ${http_code}"
-            echo "Response body: ${body}"
+            echo "Failed $PROJECT_ID - Code: $HTTP_CODE"
+            echo "Details: $BODY"
         fi
     fi
-done < "${CSV_FILE}"
+done < "$CSV_FILE"
 
-echo "Deletion process completed."
+echo "Done."
