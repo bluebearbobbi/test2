@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+# ---------------------------------------------------------
+# Delete Black Duck Projects from a CSV file of Project IDs
+# CSV format example:
+#   12345-aaaa-bbbb-cccc-987654321
+#   56789-bbbb-cccc-dddd-123456789
+#
+# Usage:
+#   ./delete_projects.sh projects.csv
+# ---------------------------------------------------------
+
+# ----- CONFIG -----
+BD_URL="https://your-blackduck-url"  # no trailing slash
+TOKEN="YOUR_API_TOKEN_HERE"
+
+CSV_FILE="$1"
+
+if [[ -z "$CSV_FILE" ]]; then
+  echo "Usage: $0 <csv_file>"
+  exit 1
+fi
+
+if [[ ! -f "$CSV_FILE" ]]; then
+  echo "Error: File '$CSV_FILE' not found."
+  exit 1
+fi
+
+echo "Starting deletion of projects listed in: $CSV_FILE"
+echo ""
+
+while IFS= read -r PROJECT_ID || [[ -n "$PROJECT_ID" ]]; do
+  # skip empty lines
+  [[ -z "$PROJECT_ID" ]] && continue
+
+  echo "Deleting Project ID: $PROJECT_ID ..."
+
+  RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+    "$BD_URL/api/projects/$PROJECT_ID" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Accept: application/json")
+
+  if [[ "$RESPONSE" == "204" ]]; then
+      echo " ✔ Successfully deleted $PROJECT_ID"
+  elif [[ "$RESPONSE" == "404" ]]; then
+      echo " ✖ Project not found: $PROJECT_ID"
+  else
+      echo " ⚠ Unexpected response ($RESPONSE) for $PROJECT_ID"
+  fi
+
+  echo ""
+done < "$CSV_FILE"
+
+echo "Done."
