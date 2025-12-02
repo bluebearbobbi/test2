@@ -10,14 +10,14 @@ if [ $# -ne 3 ]; then
     exit 1
 fi
 
-BASE_URL="$1"
+BASE_URL="${1%/}"  # Remove trailing slash if present
 API_TOKEN="$2"
 CSV_FILE="$3"
 
 # Fetch bearer token
 TOKEN_RESPONSE=$(curl -s -k -X POST "${BASE_URL}/api/tokens/authenticate" \
     -H "Authorization: token ${API_TOKEN}" \
-    -H "Accept: application/vnd.blackducksoftware.user-4+json")
+    -H "Accept: application/vnd.blackducksoftware.user-4+json" 2>&1)
 
 BEARER_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.bearerToken' 2>/dev/null)
 
@@ -28,16 +28,18 @@ fi
 
 echo "Bearer token fetched successfully."
 
-# Function to perform curl and get body and http code
+# Function to perform curl and get body and http code, capturing stderr
 do_curl() {
-    response=$(curl -s -k -w "\n%{http_code}" "$@")
+    response=$(curl -s -k -w "\n%{http_code}" "$@" 2>&1)
     http_code="${response##*$'\n'}"
-    body="${response%$'\n'${http_code}}"
+    body="${response%${http_code}}"
+    body="${body%$'\n'}"  # Remove trailing newline if present
 }
 
 # Read project IDs from CSV and delete each one
 while IFS= read -r PROJECT_ID; do
-    PROJECT_ID=$(echo "$PROJECT_ID" | sed 's/^[ \t]*//;s/[ \t]*$//')  # Trim any whitespace
+    PROJECT_ID="${PROJECT_ID%$'\r'}"  # Remove carriage return if present (from DOS CSV)
+    PROJECT_ID=$(echo "$PROJECT_ID" | sed 's/^[ \t]*//;s/[ \t]*$//')  # Trim whitespace
     if [ -n "$PROJECT_ID" ]; then
         FULL_URL="${BASE_URL}/api/projects/${PROJECT_ID}"
         echo "Attempting to delete: ${FULL_URL}"
@@ -49,7 +51,7 @@ while IFS= read -r PROJECT_ID; do
             echo "Successfully deleted project ${PROJECT_ID}"
         else
             echo "Failed to delete project ${PROJECT_ID}. HTTP code: ${http_code}"
-            echo "Response body: ${body}"
+            echo "Response body/error: ${body}"
         fi
     fi
 done < "${CSV_FILE}"
