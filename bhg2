@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# Usage: ./delete_blackduck_projects.sh <BASE_URL> <API_TOKEN> <CSV_FILE>
+# Example: ./delete_blackduck_projects.sh https://your-blackduck-instance.com YOUR_API_TOKEN_HERE project_ids.csv
+# The CSV_FILE should contain one project ID per line, no headers.
+# Note: This script will delete ALL versions of each project before deleting the project itself.
+# WARNING: Deletion is permanent and cannot be undone. Use with caution.
+
+if [ $# -ne 3 ]; then
+    echo "Usage: $0 <BASE_URL> <API_TOKEN> <CSV_FILE>"
+    exit 1
+fi
+
+BASE_URL="$1"
+API_TOKEN="$2"
+CSV_FILE="$3"
+
+# Fetch bearer token
+TOKEN_RESPONSE=$(curl -s -k -X POST "${BASE_URL}/api/tokens/authenticate" \
+    -H "Authorization: token ${API_TOKEN}" \
+    -H "Accept: application/vnd.blackducksoftware.user-4+json")
+
+BEARER_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.bearerToken' 2>/dev/null)
+
+if [ -z "$BEARER_TOKEN" ] || [ "$BEARER_TOKEN" = "null" ]; then
+    echo "Failed to fetch bearer token. Response: ${TOKEN_RESPONSE}"
+    exit 1
+fi
+
+echo "Bearer token fetched successfully."
+
+# Function to perform curl and get body and http code
+do_curl() {
+    response=$(curl -s -k -w "\n%{http_code}" "$@")
+    http_code=$(echo "$response" | tail -n 1)
+    body=$(echo "$response" | head -n -1)
+}
+
+# Read project IDs from CSV
+while IFS= read -r PROJECT_ID; do
+    if [ -n "$PROJECT_ID" ]; then
+        echo "Processing project: ${PROJECT_ID}"
+
+        # Get project versions
+        do_curl -X GET "${BASE_URL}/api/projects/${PROJECT_ID}/versions?limit=9999" \
+            -H "Authorization: Bearer ${BEARER_TOKEN}" \
+            -H "Accept: application/json"
+
+        if [ "${http_code:0:1}" != "2" ]; then
+            echo "Failed to get versions for project ${PROJECT_ID}. HTTP code: ${http_code}"
+            echo "Response body: ${body}"
+            continue
+        fi
+
+        # Extract version hrefs
+        VERSION_HREFS=$(echo "${body}" | jq -r '.items[]? ._meta.href' 2>/dev/null)
+
+        if [ -z "$VERSION_HREFS" ]; then
+            echo "No versions found for project ${PROJECT_ID}."
+        else
+            echo "Found $(echo "$VERSION_HREFS" | wc -l) versions to delete."
+            # Delete each version
+            while IFS= read -r VERSION_HREF; do
+                if [ -n "$VERSION_HREF" ]; then
+                    echo "Deleting version: ${VERSION_HREF}"
+                    do_curl -X DELETE "${VERSION_HREF}" \
+                        -H "Authorization: Bearer ${BEARER_TOKEN}" \
+                        -H "Accept: application/json"
+
+                    if [ "${http_code}" = "204" ] || [ "${http_code}" = "200" ]; then
+                        echo "Successfully deleted version ${VERSION_HREF}"
+                    else
+                        echo "Failed to delete version ${VERSION_HREF}. HTTP code: ${http_code}"
+                        echo "Response body: ${body}"
+                        # Continue to next, but project delete might fail if any version remains
+                    fi
+                fi
+            done <<< "${VERSION_HREFS}"
+        fi
+
+        # Now delete the project
+        echo "Deleting project: ${PROJECT_ID}"
+        do_curl -X DELETE "${BASE_URL}/api/projects/${PROJECT_ID}" \
+            -H "Authorization: Bearer ${BEARER_TOKEN}" \
+            -H "Accept: application/json"
+
+        if [ "${http_code}" = "204" ] || [ "${http_code}" = "200" ]; then
+            echo "Successfully deleted project ${PROJECT_ID}"
+        else
+            echo "Failed to delete project ${PROJECT_ID}. HTTP code: ${http_code}"
+            echo "Response body: ${body}"
+        fi
+    fi
+done < "${CSV_FILE}"
+
+echo "Deletion process completed."
