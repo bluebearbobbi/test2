@@ -31,15 +31,17 @@ echo "Bearer token fetched successfully."
 # Function to perform curl and get body and http code
 do_curl() {
     response=$(curl -s -k -w "\n%{http_code}" "$@")
-    http_code=$(echo "$response" | tail -n 1)
-    body=$(echo "$response" | head -n -1)
+    http_code="${response##*$'\n'}"
+    body="${response%$'\n'${http_code}}"
 }
 
 # Read project IDs from CSV and delete each one
 while IFS= read -r PROJECT_ID; do
+    PROJECT_ID=$(echo "$PROJECT_ID" | sed 's/^[ \t]*//;s/[ \t]*$//')  # Trim any whitespace
     if [ -n "$PROJECT_ID" ]; then
-        echo "Deleting project: ${PROJECT_ID}"
-        do_curl -X DELETE "${BASE_URL}/api/projects/${PROJECT_ID}" \
+        FULL_URL="${BASE_URL}/api/projects/${PROJECT_ID}"
+        echo "Attempting to delete: ${FULL_URL}"
+        do_curl -X DELETE "${FULL_URL}" \
             -H "Authorization: Bearer ${BEARER_TOKEN}" \
             -H "Accept: application/json"
 
