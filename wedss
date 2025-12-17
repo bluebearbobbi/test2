@@ -1,7 +1,37 @@
-for blob in container_contents/blobs/sha256/*; do
-  mkdir tmp_layer
-  gzip -dc "$blob" | tar -xf - -C tmp_layer
-  find tmp_layer -name "package.json"
-  find tmp_layer -type d -name "node_modules"
-  rm -rf tmp_layer
+#!/bin/bash
+
+OCI_TAR="your-oci-image.tar"
+EXTRACT_DIR="oci_extract"
+FLATTEN_DIR="flattened"
+
+mkdir -p "$EXTRACT_DIR" "$FLATTEN_DIR"
+
+# Extract the OCI tar
+tar -xf "$OCI_TAR" -C "$EXTRACT_DIR"
+
+# Loop over all blobs
+for blob in "$EXTRACT_DIR"/blobs/sha256/*; do
+    mkdir tmp_layer
+    type=$(file -b "$blob")
+    
+    if [[ "$type" == *"gzip"* ]]; then
+        gzip -dc "$blob" | tar -xf - -C tmp_layer
+    elif [[ "$type" == *"Zstandard"* ]]; then
+        zstd -d "$blob" -c | tar -xf - -C tmp_layer
+    elif [[ "$type" == *"tar archive"* ]]; then
+        tar -xf "$blob" -C tmp_layer
+    else
+        echo "Unknown blob type: $blob ($type)"
+        rm -rf tmp_layer
+        continue
+    fi
+    
+    # Copy extracted layer into flattened folder
+    cp -r tmp_layer/* "$FLATTEN_DIR"/
+    rm -rf tmp_layer
 done
+
+# Search flattened filesystem for Node.js
+echo "Searching for package.json and node_modules..."
+find "$FLATTEN_DIR" -name "package.json"
+find "$FLATTEN_DIR" -type d -name "node_modules"
