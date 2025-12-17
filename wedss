@@ -1,0 +1,7 @@
+for blob in container_contents/blobs/sha256/*; do
+  mkdir tmp_layer
+  gzip -dc "$blob" | tar -xf - -C tmp_layer
+  find tmp_layer -name "package.json"
+  find tmp_layer -type d -name "node_modules"
+  rm -rf tmp_layer
+done
